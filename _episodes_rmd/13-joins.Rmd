@@ -71,6 +71,20 @@ medals <- medals[[1]]
 
 medals <- medals %>%
   filter(Rank != "Total (87 NOCs)") %>% 
-  mutate(country=stringr::str_split(NOC, " \\(", n=1))
+  mutate(country=stringr::word(NOC,1, sep=fixed(intToUtf8(160)))) %>% # Delimited on &nbsp
+  select(country, Gold, Silver, Bronze) %>% 
+  rename(gold=Gold, silver=Silver, bronze=Bronze) %>% 
+  mutate(medalTotal = gold + silver + bronze)
+```
+
+```{r}
+
+medaljoin <- gapminder %>% 
+  filter(year == 2007) %>% 
+  inner_join(medals, by="country") # Illustrate difference between join types
+```
+```{r}
+medaljoin %>% ggplot(aes(x=gdpPercap, y=medalTotal, colour = continent)) + 
+  geom_point()
 ```
 
