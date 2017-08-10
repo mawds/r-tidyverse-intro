@@ -116,7 +116,8 @@ gapcent <- gapminder %>% inner_join(centroids, by=c("country"="SHORT_NAME"))
 
 
 ~~~
-# Olympic medal table?
+# Olympic medal table - all the loading and cleaning will be done outwith the lesson
+# Just get participants to load cleaned version
 
 library(rvest)
 ~~~
@@ -149,15 +150,13 @@ The following object is masked from 'package:readr':
 
 
 ~~~
-medal_page <- read_html("https://en.wikipedia.org/wiki/2016_Summer_Olympics_medal_table") %>% 
-  html_node(.headerSort:nth-child(2))
+medals <- read_html("https://en.wikipedia.org/wiki/2008_Summer_Olympics_medal_table") %>% 
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[2]') %>% html_table(fill=TRUE)
+medals <- medals[[1]]
+
+medals <- medals %>%
+  filter(Rank != "Total (87 NOCs)") %>% 
+  mutate(country=stringr::str_split(NOC, " \\(", n=1))
 ~~~
 {: .r}
-
-
-
-~~~
-Error in make_selector(css, xpath): object '.headerSort' not found
-~~~
-{: .error}
 
