@@ -3,15 +3,16 @@ title: Joins and data in the wild
 teaching: 30
 exercises: 15
 questions:
-- "How can I change the format of dataframes?"
+- "How do I join data-sets?"
 objectives:
-- "To be understand the concepts of 'long' and 'wide' data formats and be able to convert between them with `tidyr`."
+- "To be able to join tibbles"
+- "To understand the difference between the different join types"
+- "To have an appreciation of some of the difficulties that can occur when using real-life data"
 keypoints:
-- "Use the `tidyr` package to change the layout of dataframes."
-- "Use `gather()` to go from wide to long format."
-- "Use `spread()` to go from long to wide format."
+- "Use join_{left,inner,right} to join data on common values"
 source: Rmd
 ---
+
 
 ```{r, include=FALSE}
 source("../bin/chunk-options.R")
@@ -22,48 +23,21 @@ gapminder <- read_csv("data/gapminder-FiveYearData.csv")
 ```
 
 
-```{r}
-centroids <- read_csv("data/country_centroids_primary.csv")
-```
-Ah - it's not a CSV. This is why you should look at the data first.  Looks like it might be a tsv..
-```{r}
-centroids <- read_tsv("data/country_centroids_primary.csv")
-```
+In this episode we will look at how to join tibbles together.  We will continue to use the gapminder data, and will look at how to join data on the medal performance of countries in the 2008 Olympics.  In doing so, we'll see some of the difficulties in working with real-world data, and will think about ways of solving them.
 
-Column spec looks reasonable - things we'd expect to be numbers are.  Things we'd expect to be character are
+There are many ways of joining data in R; in common with the rest of this course we will focus on the tidyverse way, and use `dplyr` to join data.
 
-## Joining data
-
-We can use `dplyr` to join data.    It looks like we should try and match the `SHORT_NAME` column of the centroids data to the `country` column of the gapminder data.
-
-```{r}
-gapcountries <- gapminder %>% select(country, year) %>% filter(year == 2007)
-
-```
-
-```{r}
-testjoin <- gapcountries %>% full_join(centroids, by=c("country"="SHORT_NAME"))
-```
+## Loading the Olympic medal data
 
 
-
-```{r}
-gapcent <- gapminder %>% inner_join(centroids, by=c("country"="SHORT_NAME"))
-```
-
-```{r}
- gapminder %>%
-  inner_join(centroids, by=c("country"="SHORT_NAME")) %>%
-  filter(year==2007) %>%
-  ggplot(aes(x=LONG, y=LAT, colour=lifeExp, size=pop)) + geom_point()
-```
-
-
-```{r}
-# Olympic medal table - all the loading and cleaning will be done outwith the lesson
-# Just get participants to load cleaned version
+```{r, echo=FALSE, eval=FALSE}
+# Olympic medal table - all the loading and cleaning will 
+# be done outwith the lesson.  Just get participants to load 
+# cleaned version.  This chunk will produce the required
+# data file; it isn't run or visible in the lesson
 
 library(rvest)
+library(stringr)
 
 medals <- read_html("https://en.wikipedia.org/wiki/2008_Summer_Olympics_medal_table") %>% 
   html_nodes(xpath='//*[@id="mw-content-text"]/div/table[2]') %>% html_table(fill=TRUE)
@@ -73,9 +47,80 @@ medals <- medals %>%
   filter(Rank != "Total (87 NOCs)") %>% 
   mutate(country=stringr::word(NOC,1, sep=fixed(intToUtf8(160)))) %>% # Delimited on &nbsp
   select(country, Gold, Silver, Bronze) %>% 
-  rename(gold=Gold, silver=Silver, bronze=Bronze) %>% 
-  mutate(medalTotal = gold + silver + bronze)
+  rename(gold=Gold, silver=Silver, bronze=Bronze) 
+write_csv(medals, "data/medals.csv")
 ```
+
+The [medal table for the 2008 Olympic games was downloaded from Wikipedia](https://en.wikipedia.org/wiki/2008_Summer_Olympics_medal_table) and converted to a csv file.  We can load this in the same way as the gapminder data:
+
+```{r}
+medals <- read_csv("data/medals.csv")
+```
+
+We see that the column specification that `read_csv()` guessed looks reasonable; the countries are characters and columns containing the numbers of gold, silver and bronze medals have all been read as integers.
+
+Before we join the two tables, complete the following challenges, which will generate a useful additional variable, and limit our gapminder data to the year closest to the medal data:
+
+> ## Challenge: Generating medal totals
+> 
+> Use the `mutate` command to add a new column in your data-set
+> called `total` that contains the total number of models awarded to 
+> each country.  
+>
+> > ## Solution
+> > 
+> > ```{r}
+> > medals <- medals %>% mutate(total = gold + silver + bronze)
+> > ```
+> > 
+> {: .solution}
+{: .challenge}
+
+> ## Challenge: Filtering the gapminder data
+> 
+> Use `dplyr` to create a new tibble, gap2007,  that only contains data for 2007
+> 
+> > ## Solution
+> > 
+> > ```{r}
+> > gap2007 <- gapminder %>% filter(year == 2007)
+> > ```
+> > 
+> {: .solution}
+{: .challenge}
+
+## Joining data tables
+
+Before we join the `medals` and `gap2007` data, let's consider a minimal
+example of the different types of join that exist.
+
+```{r}
+
+library(tibble)
+animallegs <- tribble(~animal, ~legs,
+                      "Cat", 4,
+                      "Dog", 4,
+                      "Bird", 2,
+                      "Fish", 0)
+
+animalsound <- tribble(~animal, ~sound, 
+                       "Cat", "miaw",
+                       "Bird", "tweet",
+                       "Fish", NA,
+                       "Cow", "moo")
+
+```
+
+
+
+```{r}
+# Need to think here about how we handle missings _in data_
+# vs missings generated by the join
+animallegs %>% inner_join(animalsound)
+animallegs %>% left_join(animalsound)
+animallegs %>% right_join(animalsound)
+```
+
 
 ```{r}
 
