@@ -10,6 +10,8 @@ objectives:
 - "To have an appreciation of some of the difficulties that can occur when using real-life data"
 keypoints:
 - "Use join_{left,inner,right} to join data on common values"
+- "Take care when joining data that you aren't performing 1 to many or 1 to none joins when you think you're joining 1:1"
+- "If you need to clean your data to perform a join, you should do so programatically"
 source: Rmd
 ---
 
@@ -517,13 +519,14 @@ gapmedals <- gap2007 %>% left_join(medals, by = "country") %>%
 > {: .solution}
 {: .challenge}
 
-We saw in the challenge that matching on strings can be unreliable; some country names were recorded differently in the two tables, preventing a match from being made.   Although it is beyond the scope of this course, there are several approaches we can use in this (not uncommon) situation:
+We saw in the challenge that matching on strings can be unreliable; some country names were recorded differently in the two tables, preventing a match from being made.   Although it is beyond the scope of this course, there are several approaches we can use in this (not uncommon) situation, which are described below.  One thing you **shouldn't** do is manually alter either of the source data files so that the countries match.  Such an approach makes it impossible to reproduce your work, and would need to be repeated if either data-set were updated.  Better approaches include:
 
 1. Go back to the person or organisation who provided you with the data, and ask for, e.g. standardised 3 character country codes to be provided with the data.  This often isn't possible, but it is the cleanest solution.
 2. If the cause for the mis-matches is something that's consistent for all the values (e.g. a variable is recorded in upper case in one table and lower case in another, we can use `mutate` to create a new variable with the data in the correct format: `mutate(uppercountry=toupper(country))` will convert the values of `country` to upper-case).  
 3. Construct a look-up table to map between the different ways of recording the data, and use this as an intermediate table when performing the join.   You should ideally construct the mapping table programatically so your research is reproducible; at the very least the mapping table should be included with your data, and you should include code in your analysis script to check that all the values have been accounted for.  For example, if we obtained newer gapminder data, an decided to reproduce the analysis for the 2012 olympics we would want to be sure that we'd not ignored any countries who had won a medal in 2012, but not in 2008.
 
-
+FIXME This feels like it's going down a rabbit hole - simplify example data outwith lesson before getting to this
+ point.  The code chunk introduces *far* to many new concepts - tribble, if, anti joins
 
 ~~~
 # Deal with the countries that match anyway first:
@@ -538,27 +541,46 @@ manualcountry <- tribble(~gapcountry, ~medalcountry,
                          "etc.", "etc.")
 countrymap <- bind_rows(countrymap, manualcountry)
 
+
+# We can use an anti_join() to see which countries remain unaccounted for
+gapnomedal <- gap2007 %>% anti_join(countrymap, by = c("country" = "gapcountry"))
+medalnogap <- medals %>% anti_join(countrymap, by = c("country" = "medalcountry"))
+
+# Check the number of unaccuonted for countries is what we'd expect
+
+if (nrow(gapnomedal) != 75 || nrow(medalnogap) != 21) {
+  warning("Some countries unaccounted for")
+}
+~~~
+{: .r}
+
+
+
+~~~
+Warning: Some countries unaccounted for
+~~~
+{: .error}
+
+
+
+~~~
+# We use an inner join here since *all* countries should be accounted for
 medaljoin2 <- gap2007 %>% 
-  full_join(countrymap, by = c("country" = "gapcountry")) %>% 
-  full_join(medals, by = c("medalcountry" = "country")) %>% 
+  inner_join(countrymap, by = c("country" = "gapcountry")) %>% 
+  inner_join(medals, by = c("medalcountry" = "country")) %>% 
   select(-medalcountry)
 ~~~
 {: .r}
 
+Having cleaned and joined our data we could use, e.g. `ggplot2` to explore the relationship between, say, population and medal total:
+
 
 
 ~~~
-medaljoin2 %>% ggplot(aes(x = gdpPercap, y = total, colour = continent)) + 
-  geom_point()
+medaljoin2 %>% ggplot(aes(x = pop, y = total, colour = continent)) + 
+  geom_point() + scale_x_log10()
 ~~~
 {: .r}
-
-
-
-~~~
-Warning: Removed 96 rows containing missing values (geom_point).
-~~~
-{: .error}
 
 <img src="../fig/rmd-13-unnamed-chunk-21-1.png" title="plot of chunk unnamed-chunk-21" alt="plot of chunk unnamed-chunk-21" style="display: block; margin: auto;" />
 
