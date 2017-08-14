@@ -84,6 +84,8 @@ Before we join the two tables, complete the following challenges, which will gen
 > {: .solution}
 {: .challenge}
 
+
+
 ## Joining data tables
 
 Before we join the `medals` and `gap2007` data, let's consider a smaller
@@ -379,21 +381,174 @@ A row is returned for each of the animals in sound table, matched to the legs ta
 FIXME Write this section.  Need to cover joins on variables with different names, joins on multiple variables
 
 
-
-
-
 ## The medals data
 
+Now that we've seen the different types of join that exist, let's apply this to a more complex example, and return to the medals data.  We want to join the medals data to the 2007 gapminder data (which we created earlier in the `gap2007` tibble), so that we can explore whether factors like the GDP per capita and population of a country are related to the number of medals a country won. In this section we'll discover some of the problems that can occur when dealing with real-life data, and will think about ways we can solve them.
+
+We are going to need to join the gapminder data to the medal data by country.   We would expect each country to appear at most once in each table.   We can check this is true by grouping each data set by country, getting a total of the number of times each country appears, and filtering this do only keep groups with a total >1:
+
+FIXME: If we're going to cover functions, here would be a great place to use them.
 
 ~~~
-medaljoin <- gapminder %>% 
-  filter(year == 2007) %>% 
-  inner_join(medals, by="country") # Illustrate difference between join types
+gap2007 %>% group_by(country) %>%
+  mutate(numoccur = n()) %>% 
+  filter(numoccur > 1)
 ~~~
 {: .r}
 
+
+
 ~~~
-medaljoin %>% ggplot(aes(x=gdpPercap, y=medalTotal, colour = continent)) + 
+# A tibble: 0 x 7
+# Groups:   country [0]
+# ... with 7 variables: country <chr>, year <int>, pop <dbl>,
+#   continent <chr>, lifeExp <dbl>, gdpPercap <dbl>, numoccur <int>
+~~~
+{: .output}
+
+
+
+~~~
+medals %>% group_by(country) %>%
+  mutate(numoccur = n()) %>% 
+  filter(numoccur > 1)
+~~~
+{: .r}
+
+
+
+~~~
+# A tibble: 0 x 6
+# Groups:   country [0]
+# ... with 6 variables: country <chr>, gold <int>, silver <int>,
+#   bronze <int>, total <int>, numoccur <int>
+~~~
+{: .output}
+
+> ## Challenge
+> 
+> How many rows are in each tibble?  Should we be worried about this?
+> 
+> > ## Solution
+> > 
+> > 
+> > ~~~
+> > nrow(gap2007)
+> > ~~~
+> > {: .r}
+> > 
+> > 
+> > 
+> > ~~~
+> > [1] 142
+> > ~~~
+> > {: .output}
+> > 
+> > 
+> > 
+> > ~~~
+> > nrow(medals)
+> > ~~~
+> > {: .r}
+> > 
+> > 
+> > 
+> > ~~~
+> > [1] 87
+> > ~~~
+> > {: .output}
+> > 
+> > There are fewer rows in the medals table than the gapminder data.   At this stage we probably don't 
+> > need to worry; not every country that entered the olympics will have won any medals.  
+> > However, not every country
+> > in the world is included in the gapminder data - [there are 195/6 countries in the world](https://www.infoplease.com/world/world-statistics/how-many-countries).
+> > The medals data is an exhaustive list of all countries that won a medal. If the gapminder data contained
+> > every country in the world we would expect _every_ entry in the medals data to match an entry in the gapminder
+> > data.  However we wouldn't expect the opposite to be true; not every country won a medal.
+> >
+> {: .solution}
+{: .challenge}
+
+
+> ## Discussion - join types
+> 
+> In the previous section we looked at the different types of join; inner, left, right and full.  With your neighbour
+> describe in words what would be the results of performing each of these types of join, by country, on
+> the `gap2007` and `medals` data.  As we're trying look at the relationship between number of medals and variables
+> included in the gapminder data, what do you think the most appropriate type of join would be?
+{: .discussion}
+
+
+We wish to keep all the countries (that we have) in the gapminder data, and join the medals data to this.  In order to do so, we use a left join. We'll also sort the data by the total number of medals won, in descending order:
+
+
+~~~
+gapmedals <- gap2007 %>% left_join(medals, by = "country") %>% 
+  arrange(desc(total))
+~~~
+{: .r}
+
+> ## Challenge
+> 
+> How many rows would you expect this table to have?   Perform the join and check your answer.
+> 
+> Take a look at the resulting table.  Does it appear to have worked OK?  Filter the tibble to 
+> only show countries that don't appear to have won any medals.  Can you see any issues with this?
+> 
+> Hint: the `is.na()` function will return `TRUE` if a value is missing
+>
+> > ## Solution
+> > We would expect the table to have 142 rows, since will keep every contry that appears
+> > in the left hand table.  We have previously checked that each country appears once in each table
+> > so we wouldn't expect more than 142 rows.
+> > 
+> > We can filter the resulting tibble to just show countries with a missing medal total:
+> > 
+> > ~~~
+> > nomedals <- gapmedals %>% filter(is.na(total))
+> > ~~~
+> > {: .r}
+> >
+> > If we look at this tibble in Rstudio, we see that there are 76 counties with missing medal totals.
+> > If we cross check this against the original data, we see that there are some countries are missing 
+> > because the countries names are not all recorded consistently.  For example, the United Kingdom competes
+> > under team name "Great Britain".
+> >
+> {: .solution}
+{: .challenge}
+
+We saw in the challenge that matching on strings can be unreliable; some country names were recorded differently in the two tables, preventing a match from being made.   Although it is beyond the scope of this course, there are several approaches we can use in this (not uncommon) situation:
+
+1. Go back to the person or organisation who provided you with the data, and ask for, e.g. standardised 3 character country codes to be provided with the data.  This often isn't possible, but it is the cleanest solution.
+2. If the cause for the mis-matches is something that's consistent for all the values (e.g. a variable is recorded in upper case in one table and lower case in another, we can use `mutate` to create a new variable with the data in the correct format: `mutate(uppercountry=toupper(country))` will convert the values of `country` to upper-case).  
+3. Construct a look-up table to map between the different ways of recording the data, and use this as an intermediate table when performing the join.   You should ideally construct the mapping table programatically so your research is reproducible; at the very least the mapping table should be included with your data, and you should include code in your analysis script to check that all the values have been accounted for.  For example, if we obtained newer gapminder data, an decided to reproduce the analysis for the 2012 olympics we would want to be sure that we'd not ignored any countries who had won a medal in 2012, but not in 2008.
+
+
+
+~~~
+# Deal with the countries that match anyway first:
+countrymap <- gap2007 %>% 
+  inner_join(medals, by = "country") %>% 
+  select(country) %>% 
+  rename(gapcountry = country) %>% 
+  mutate(medalcountry = gapcountry)
+
+manualcountry <- tribble(~gapcountry, ~medalcountry,
+                         "United Kingdom", "Great Britain",
+                         "etc.", "etc.")
+countrymap <- bind_rows(countrymap, manualcountry)
+
+medaljoin2 <- gap2007 %>% 
+  full_join(countrymap, by = c("country" = "gapcountry")) %>% 
+  full_join(medals, by = c("medalcountry" = "country")) %>% 
+  select(-medalcountry)
+~~~
+{: .r}
+
+
+
+~~~
+medaljoin2 %>% ggplot(aes(x = gdpPercap, y = total, colour = continent)) + 
   geom_point()
 ~~~
 {: .r}
@@ -401,9 +556,9 @@ medaljoin %>% ggplot(aes(x=gdpPercap, y=medalTotal, colour = continent)) +
 
 
 ~~~
-Error in FUN(X[[i]], ...): object 'medalTotal' not found
+Warning: Removed 96 rows containing missing values (geom_point).
 ~~~
 {: .error}
 
-<img src="../fig/rmd-13-unnamed-chunk-16-1.png" title="plot of chunk unnamed-chunk-16" alt="plot of chunk unnamed-chunk-16" style="display: block; margin: auto;" />
+<img src="../fig/rmd-13-unnamed-chunk-21-1.png" title="plot of chunk unnamed-chunk-21" alt="plot of chunk unnamed-chunk-21" style="display: block; margin: auto;" />
 
